@@ -14,7 +14,7 @@ const sandbox = new Sandbox()
 
 export default function(pi: ExtensionAPI) {
     pi.registerTool({
-        name: 'script',
+        name: 'run_script',
         label: 'Run Script',
         description:
             'Run TypeScript or JavaScript in a sandboxed V8 isolate.' +
