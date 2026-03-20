@@ -25,8 +25,8 @@ const tools = createTypeScriptTools({
         moduleAccess: { cwd: extensionDir },
     }),
     runtimeDriverFactory: createNodeRuntimeDriverFactory(),
-    memoryLimit: 256,
-    cpuTimeLimitMs: 5000,
+    memoryLimit: 512,
+    cpuTimeLimitMs: 30000,
 })
 
 const COMPILER_OPTIONS = {

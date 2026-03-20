@@ -82,7 +82,7 @@ export class Sandbox {
                 permissions: { ...allowAllFs },
             }),
             runtimeDriverFactory,
-            memoryLimit: 128,
+            memoryLimit: 512,
         })
 
         const onAbort = () => {
