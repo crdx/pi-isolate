@@ -1,0 +1,23 @@
+{
+    "name": "pi-isolate",
+    "version": "0.1.0",
+    "type": "module",
+    "keywords": [
+        "pi-package"
+    ],
+    "pi": {
+        "extensions": [
+            "./index.ts"
+        ]
+    },
+    "dependencies": {
+        "@secure-exec/typescript": "^0.1.0",
+        "@types/node": "^24",
+        "secure-exec": "^0.1.0"
+    },
+    "peerDependencies": {
+        "@mariozechner/pi-ai": "*",
+        "@mariozechner/pi-coding-agent": "*",
+        "@mariozechner/pi-tui": "*"
+    }
+}
