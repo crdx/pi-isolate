@@ -8,24 +8,31 @@ import {
     DEFAULT_MAX_LINES,
     type TruncationResult,
 } from '@mariozechner/pi-coding-agent'
+import type { Config } from './config.js'
 
 interface ToolResult {
     content: { type: 'text'; text: string }[]
     details: object
 }
 
-// Shared wording for the isolate path rule — used in both the tool description and ENOENT hints.
-export function isolatePathAdvice(cwd: string): string {
-    return 'The sandbox isolate maps "/" to the project root.' +
-        ' Use relative paths (e.g. "README.md") instead of host-absolute paths' +
-        ` (e.g. "${cwd}/README.md").`
+// Builds the filesystem access description for the tool description. Includes the project directory
+// (always read/write) plus any extra paths from config so the agent knows what's available.
+export function isolatePathAdvice(config: Config): string {
+    const rwPaths = ['the project directory', ...config.extraWritePaths]
+    const roPaths = config.extraReadPaths
+
+    let advice = `Filesystem read/write: ${rwPaths.join(', ')}.`
+    if (roPaths.length > 0) {
+        advice += ` Read-only: ${roPaths.join(', ')}.`
+    }
+    return advice
 }
 
 // Truncates output to fit the context window (10000 lines / 50KB), saves the full output to a temp
 // file if truncated, and throws on non-zero exit codes. Returns a tool result like:
 //
 // { content: [{ type: 'text', text: '42' }], details: {} }
-export function buildResult(output: string, exitCode: number, cwd?: string): ToolResult {
+export function buildResult(output: string, exitCode: number): ToolResult {
     const truncation = truncateTail(output.trimEnd(), {
         maxLines: DEFAULT_MAX_LINES,
         maxBytes: DEFAULT_MAX_BYTES,
@@ -38,23 +45,10 @@ export function buildResult(output: string, exitCode: number, cwd?: string): Too
     }
 
     if (exitCode !== 0) {
-        text = appendPathHint(text, cwd)
         throw new Error(text || `exit code ${exitCode}`)
     }
 
     return { content: [{ type: 'text' as const, text }], details: {} }
-}
-
-// When an ENOENT error mentions the host cwd path, append a hint explaining that the sandbox
-// roots "/" to the project directory, so host-absolute paths don't work.
-function appendPathHint(text: string, cwd?: string): string {
-    if (!cwd || !text.includes('ENOENT')) {
-        return text
-    }
-    if (text.includes(cwd)) {
-        return text + `\n\n[Hint: ${isolatePathAdvice(cwd)}]`
-    }
-    return text
 }
 
 // Saves the full untruncated output to a temp file and returns a truncation notice.

@@ -3,6 +3,7 @@ import { Type } from '@mariozechner/pi-ai'
 import { Box, Text } from '@mariozechner/pi-tui'
 import { Compiler } from './lib/compiler.js'
 import { Sandbox } from './lib/isolate.js'
+import { loadConfig } from './lib/config.js'
 import { buildResult, isolatePathAdvice } from './lib/output.js'
 import {
     DEFAULT_TIMEOUT, buildCallHeader, highlightScript,
@@ -11,6 +12,7 @@ import {
 
 const compiler = new Compiler()
 const sandbox = new Sandbox()
+const config = loadConfig()
 
 export default function(pi: ExtensionAPI) {
     pi.registerTool({
@@ -19,7 +21,7 @@ export default function(pi: ExtensionAPI) {
         description:
             'Run TypeScript or JavaScript in a sandboxed V8 isolate.' +
             ' Network and subprocesses are unavailable.' +
-            ` ${isolatePathAdvice(process.cwd())}` +
+            ` ${isolatePathAdvice(config)}` +
             ' Use console.log() for output.',
         promptSnippet:
             'Run code for calculations, data transformations, and bulk processing',
@@ -61,7 +63,7 @@ export default function(pi: ExtensionAPI) {
                 }),
             })
 
-            return buildResult(compiled.warnings + result.output, result.exitCode, ctx.cwd)
+            return buildResult(compiled.warnings + result.output, result.exitCode)
         },
 
         renderCall(args, theme) {

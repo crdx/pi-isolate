@@ -1,12 +1,13 @@
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 import {
     NodeRuntime,
     NodeFileSystem,
     createNodeDriver,
     createNodeRuntimeDriverFactory,
-    allowAllFs,
 } from 'secure-exec'
-import type { StdioEvent } from 'secure-exec'
+import type { StdioEvent, Permissions } from 'secure-exec'
+import type { Config } from './config.js'
+import { loadConfig } from './config.js'
 
 const TIMEOUT_EXIT_CODE = 124
 
@@ -14,10 +15,23 @@ const runtimeDriverFactory = createNodeRuntimeDriverFactory()
 
 const TWO_PATH_METHODS = new Set(['rename', 'symlink', 'link'])
 
-// Re-roots NodeFileSystem so virtual "/" maps to the given root directory. secure-exec normalises
-// ".." before paths reach the VFS, so all paths are structurally confined. No escape from root.
-// Created per-call to avoid shared mutable state across parallel tool executions.
-function createRootedFilesystem(root: string) {
+// Wraps NodeFileSystem with path rewriting. secure-exec's ModuleAccessFileSystem normalises all
+// paths to virtual absolute paths (e.g. "package.json" → "/package.json", "." → "/"). Paths that
+// already start with a known real root (project dir, extra read/write paths) pass through unchanged.
+// Everything else gets the project root prepended, mapping the virtual "/" to the project directory.
+// This means both relative paths and real absolute paths work from the agent's perspective.
+function createProjectFilesystem(projectRoot: string, config: Config): NodeFileSystem {
+    const knownRoots = [projectRoot, ...config.extraReadPaths, ...config.extraWritePaths]
+
+    const rewritePath = (path: string): string => {
+        for (const root of knownRoots) {
+            if (path === root || path.startsWith(trailingSlash(root))) {
+                return path
+            }
+        }
+        return join(projectRoot, path)
+    }
+
     return new Proxy(new NodeFileSystem(), {
         get(target, property, receiver) {
             const value = Reflect.get(target, property, receiver) as unknown
@@ -27,12 +41,70 @@ function createRootedFilesystem(root: string) {
             const method = value as (...args: unknown[]) => unknown
             if (TWO_PATH_METHODS.has(property as string)) {
                 return (first: string, second: string, ...rest: unknown[]) =>
-                    method.call(target, join(root, first), join(root, second), ...rest)
+                    method.call(target, rewritePath(first), rewritePath(second), ...rest)
             }
             return (first: string, ...rest: unknown[]) =>
-                method.call(target, join(root, first), ...rest)
+                method.call(target, rewritePath(first), ...rest)
         },
     })
+}
+
+const WRITE_OPS = new Set([
+    'write', 'mkdir', 'createDir', 'rm', 'rename', 'symlink', 'link',
+    'chmod', 'chown', 'utimes', 'truncate',
+])
+
+function trailingSlash(path: string): string {
+    return path.endsWith('/') ? path : path + '/'
+}
+
+function isWithin(resolved: string, root: string): boolean {
+    return resolved === root || resolved.startsWith(trailingSlash(root))
+}
+
+// Restricts filesystem access to the project directory plus any extra paths from config. Reads and
+// writes within the project are allowed. Extra paths grant read-only or read-write access depending
+// on which config list they appear in. Everything else is denied with EACCES. Paths arriving here
+// are virtual absolute paths from ModuleAccessFileSystem (e.g. "/package.json" for a relative
+// "package.json"), so we resolve them against the project root to get the real target.
+function createPermissions(projectRoot: string, config: Config): Permissions {
+    const readRoots = config.extraReadPaths.map(p => resolve(p))
+    const writeRoots = config.extraWritePaths.map(p => resolve(p))
+    const knownRoots = [projectRoot, ...readRoots, ...writeRoots]
+
+    // Map a virtual path to a real path using the same logic as createProjectFilesystem.
+    const toRealPath = (virtualPath: string): string => {
+        for (const root of knownRoots) {
+            if (virtualPath === root || virtualPath.startsWith(trailingSlash(root))) {
+                return virtualPath
+            }
+        }
+        return join(projectRoot, virtualPath)
+    }
+
+    return {
+        fs: (request) => {
+            const resolved = toRealPath(request.path)
+            const isWrite = WRITE_OPS.has(request.op)
+
+            // Project directory: full access.
+            if (isWithin(resolved, projectRoot)) {
+                return { allow: true }
+            }
+
+            // Extra write paths: full access.
+            if (writeRoots.some(root => isWithin(resolved, root))) {
+                return { allow: true }
+            }
+
+            // Extra read paths: read-only.
+            if (!isWrite && readRoots.some(root => isWithin(resolved, root))) {
+                return { allow: true }
+            }
+
+            return { allow: false, reason: `access denied: ${request.path}` }
+        },
+    }
 }
 
 export interface RunOptions {
@@ -49,8 +121,9 @@ export interface RunResult {
 }
 
 // Runs compiled JavaScript in a secure-exec V8 isolate with filesystem access restricted to the
-// project root. The VFS re-roots virtual "/" to the project directory, and sandbox cwd is set to
-// "/" so relative paths work naturally.
+// project root. Uses the real host filesystem with permission-based access control, so paths inside
+// the isolate match what the agent sees outside (no re-rooting). The isolate's cwd is set to the
+// actual project directory.
 //
 // Accumulates stdout/stderr line by line, streaming each chunk via onOutput. Stderr is prefixed so
 // the LLM can distinguish it:
@@ -76,10 +149,12 @@ export class Sandbox {
             onOutput?.(output)
         }
 
+        const config = loadConfig()
+
         const runtime = new NodeRuntime({
             systemDriver: createNodeDriver({
-                filesystem: createRootedFilesystem(cwd),
-                permissions: { ...allowAllFs },
+                filesystem: createProjectFilesystem(cwd, config),
+                permissions: createPermissions(cwd, config),
             }),
             runtimeDriverFactory,
             memoryLimit: 512,
@@ -94,7 +169,7 @@ export class Sandbox {
         let result
         try {
             result = await runtime.exec(code, {
-                cwd: '/',
+                cwd,
                 cpuTimeLimitMs: timeout * 1000,
                 onStdio,
             })

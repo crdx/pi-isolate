@@ -11,9 +11,9 @@
         ]
     },
     "dependencies": {
-        "@secure-exec/typescript": "^0.1.0",
+        "@secure-exec/typescript": "^0.2.1",
         "@types/node": "^24",
-        "secure-exec": "^0.1.0"
+        "secure-exec": "^0.2.1"
     },
     "peerDependencies": {
         "@mariozechner/pi-ai": "*",

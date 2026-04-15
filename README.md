@@ -18,9 +18,25 @@ The guidelines tell it to use it for "calculations, data transformations, and bu
 
 The code is typechecked and then run in a V8 isolate with no networking or subprocess capabilities.
 
-The isolate can read and write files within the project root but cannot escape it. Both relative paths (`README.md`) and sandbox-absolute paths (`/README.md`) work, as they all resolve to the project directory.
+The isolate uses the real host filesystem with permission-based access control. Paths inside the isolate match what the agent sees outside — no re-rooting or virtual filesystem mapping. By default, the isolate can read and write files within the project directory. Additional paths can be configured (see below).
 
 This functionality is provided by the [`secure-exec`](https://secureexec.dev) package.
+
+## Configuration
+
+Create `~/.pi/agent/pi-isolate.json` to grant the isolate access to paths outside the project directory:
+
+```json
+{
+    "extraReadPaths": ["/tmp"],
+    "extraWritePaths": ["/tmp"]
+}
+```
+
+- `extraReadPaths` — directories the isolate can read from (read-only).
+- `extraWritePaths` — directories the isolate can read from and write to.
+
+The project directory always has full read/write access regardless of this configuration. All fields are optional and default to empty arrays.
 
 ## Display format
 
