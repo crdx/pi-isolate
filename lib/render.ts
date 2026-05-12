@@ -18,9 +18,11 @@ export function buildCallHeader(args: Record<string, unknown>, theme: Theme): st
         header += ' ' + theme.fg('muted', `with timeout ${timeout}s`)
     }
 
-    const intent = (args.intent as string | undefined) ?? ''
+    let intent = args.intent ?? ''
     if (intent) {
-        header += ' ' + theme.fg('accent', intent)
+        // Lowercase the first letter if needed
+        intent = intent[0]?.toLowerCase() + intent.slice(1)
+        header += ' ' + theme.fg('warning', `# ${intent}`)
     }
 
     return header
