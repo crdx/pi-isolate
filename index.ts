@@ -12,7 +12,26 @@ import {
 const compiler = new Compiler()
 const sandbox = new Sandbox()
 
+function hasToolOverride(): boolean {
+    return process.argv.includes('--tools') || process.argv.includes('--no-tools')
+}
+
+function extensionToolEnabled(name: string): boolean {
+    const inList = (value: string) => value.split(',').map(s => s.trim()).includes(name)
+
+    for (const arg of process.argv) {
+        if (arg.startsWith('--extension-tools=')) {
+            return inList(arg.slice('--extension-tools='.length))
+        }
+    }
+    return false
+}
+
 export default function(pi: ExtensionAPI) {
+    if (hasToolOverride() && !extensionToolEnabled('run_script')) {
+        return
+    }
+
     pi.registerTool({
         name: 'run_script',
         label: 'Run Script',
