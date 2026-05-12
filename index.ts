@@ -27,13 +27,15 @@ function extensionToolEnabled(name: string): boolean {
     return false
 }
 
+const TOOL_NAME = 'run_script'
+
 export default function(pi: ExtensionAPI) {
-    if (hasToolOverride() && !extensionToolEnabled('run_script')) {
+    if (hasToolOverride() && !extensionToolEnabled(TOOL_NAME)) {
         return
     }
 
     pi.registerTool({
-        name: 'run_script',
+        name: TOOL_NAME,
         label: 'Run Script',
         description:
             'Run TypeScript or JavaScript in a sandboxed V8 isolate.' +
