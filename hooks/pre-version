@@ -1,0 +1,28 @@
+#!/bin/bash
+set -euo pipefail
+
+NEW_VERSION="$1"
+
+# update root version in package.json
+sed -i -E "s/(\"version\"[[:space:]]*:[[:space:]]*\")[^\"]+(\")/\\1${NEW_VERSION}\\2/" package.json
+
+# update both the root version and packages[""].version in package-lock.json
+python3 - "$NEW_VERSION" <<'PY'
+import json, sys
+new_version = sys.argv[1]
+with open('package-lock.json') as f:
+    data = json.load(f)
+data['version'] = new_version
+if 'packages' in data and '' in data['packages']:
+    data['packages']['']['version'] = new_version
+with open('package-lock.json', 'w') as f:
+    json.dump(data, f, indent=2)
+    f.write('\n')
+PY
+
+git add package.json package-lock.json CHANGELOG.md
+if git diff --cached --quiet; then
+    echo "Nothing to commit (files already committed)."
+else
+    git commit -m "Release v${NEW_VERSION}"
+fi
