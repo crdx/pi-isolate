@@ -83,6 +83,10 @@ export class Sandbox {
             }),
             runtimeDriverFactory,
             memoryLimit: 512,
+            payloadLimits: {
+                jsonPayloadBytes: 32 * 1024 * 1024,
+                base64TransferBytes: 32 * 1024 * 1024,
+            },
         })
 
         const onAbort = () => {
