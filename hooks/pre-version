@@ -13,7 +13,7 @@ if ! awk '
     exit 1
 fi
 
-sed -i "s/^## \[Next\]\$/&\n\n## [${NEW_VERSION}] - $(date +%F)/" CHANGELOG.md
+sed -i "s/^## \[Next\]\$/&\n\n## [${NEW_VERSION}] — $(date +%F)/" CHANGELOG.md
 
 # update root version in package.json
 sed -i -E "s/(\"version\"[[:space:]]*:[[:space:]]*\")[^\"]+(\")/\\1${NEW_VERSION}\\2/" package.json
